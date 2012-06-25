@@ -1,0 +1,76 @@
+#!/usr/local/bin/gosh
+
+(define optbl
+  '((HALT ())
+    (LREF (n . $x))
+    (FREF (n . $x))
+    (GREF (sym . $x))
+    (UNBOX $x)
+    (CONST (obj . $x))
+    (CLOSE (argnum n $body . $x))
+    (BOX (n . $x))
+    (TEST ($then . $else))
+    (LSET (n . $x))
+    (FSET (n . $x))
+    (GSET (sym . $x))
+    (CONTI (tail$ . $x))
+    (NUATE (stack . $x))
+    (FRAME ($x . $ret))
+    (ARG $x)
+    (SHIFT (n . $x))
+    (APPLY (argnum))
+    (RET ())
+    (EXTEND (argnum . $x))
+    (SHRINK (n . $x))
+    (UNDEF $x)
+    
+    (GREF-APPLY (sym n))
+    (GREF-SHIFT-APPLY (sym n))
+    (SHIFT-APPLY (n))
+    (CONST-ARG (obj . $x))
+    ))
+
+
+(define *h* (make-hash-table))
+
+(let loop ((ls optbl)
+           (i 0))
+  (if (null? ls)
+      '()
+    (let* ((e (car ls))
+           (sym (car e))
+           (args (cadr e)))
+      (hash-table-put! *h* sym (list i args))
+      (loop (cdr ls) (+ i 1)))))
+
+
+(define (op-sym->code ls)
+  (define (each* f xs ys)
+    (set-car! ys (f (car xs) (car ys)))
+    (cond ((pair? (cdr xs))
+           (each* f (cdr xs) (cdr ys)))
+          ((null? (cdr xs))
+           '())
+          (else
+           (set-cdr! ys (f (cdr xs) (cdr ys))))))
+  (define (f sym val)
+    (if (eq? (string-ref (symbol->string sym) 0)
+             #\$)
+        (op-sym->code val)
+      val))
+  
+  (when (pair? ls)
+    (let1 sym (car ls)
+      (when (hash-table-exists? *h* sym)
+        (let* ((e (hash-table-get *h* sym))
+               (opid (car e))
+               (elems (cadr e)))
+          (set-car! ls opid)
+          (each* f (cons 'op elems) ls)))))
+  ls)
+
+
+(define (main args)
+  (until (read) eof-object? => sexp
+    (write/ss (op-sym->code sexp))
+    (newline)))
